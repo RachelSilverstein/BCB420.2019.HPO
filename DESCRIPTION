@@ -1,0 +1,16 @@
+Package: BCB420.2019.HPO
+Type: Package
+Title: Human Phenotye Ontology Package
+Version: 0.1.0
+Date: 2019-01-23
+Authors@R: c(
+    person("Rachel", "Silverstein", email = "rachel.silverstein@mail.utoronto.ca", role = c("aut", "cre"),  comment = c(ORCID="0000-0001-5724-2252")),
+    person("Boris", "Steipe", email = "boris.steipe@utoronto.ca", role = "ctb", comment = c(ORCID = "0000-0002-1134-6758"))
+    )
+Description: An R package to parse data from Human Phenotype Ontology annotation files linking human genes to disease pheontypes (https://hpo.jax.org/app/download/annotation).
+License: file LICENSE
+Encoding: UTF-8
+LazyData: true
+Suggests:
+    testthat
+RoxygenNote: 6.1.1
