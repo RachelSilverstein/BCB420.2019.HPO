@@ -64,7 +64,9 @@ Additionally, steps to annotate an example gene set with HPO terms is provided a
 
 ----
 
-TO DO
+The [Human Phenotype Ontology](https://hpo.jax.org/app/) is a controlled vocabulary that describes abnormal phenotypes associated with human diseases. Phenotypes are curated from the literature as well as from Orphanet, DECIPHER, and OMIM. In addition to providing the ontology, HPO provides files which annotate human genes with HPO terms associated with disruptions in that gene. It is the annotation data that is used in this project.
+
+The version of HPO used for this project is Build #153 (Dec 21, 2018 11:56:54 AM). A 'build history' is available at [Project hpo.annotations.monthly](http://compbio.charite.de/jenkins/job/hpo.annotations.monthly/), where you can select Build #153. Note that using the [downloads tab](https://hpo.jax.org/app/download/annotation) of the [HPO page](https://hpo.jax.org/app/) may not provide the same results as this page is updated monthly with new versions of the annotations file.
 
 &nbsp;
 
@@ -72,9 +74,7 @@ TO DO
 
 ----
 
-The version of HPO used for this project is Build #153 (Dec 21, 2018 11:56:54 AM). A 'build history' is available at [Project hpo.annotations.monthly](http://compbio.charite.de/jenkins/job/hpo.annotations.monthly/), where you can select Build #153. Note that using the [downloads tab](https://hpo.jax.org/app/download/annotation) of the [HPO page](https://hpo.jax.org/app/) may not provide the same results as this page is updated monthly with new versions of the annotations file.
-
-Once you have navigated to [Build #153](http://compbio.charite.de/jenkins/job/hpo.annotations.monthly/153/), select 'Expand all' to see a list of files available for download. Before downloading data, note the [license restrictions](https://hpo.jax.org/app/license) that apply to all files provided by the HPO project. 
+Navigate to [Build #153](http://compbio.charite.de/jenkins/job/hpo.annotations.monthly/153/), select 'Expand all' to see a list of files available for download. Before downloading data, note the [license restrictions](https://hpo.jax.org/app/license) that apply to all files provided by the HPO project. 
 
 Download the file entitled: 
 ```text
@@ -131,6 +131,10 @@ head(HPOdata)
 ```
 &nbsp;
 
+### Structure of the Data
+
+----
+
 The data set retrieved from HPO contains multiple rows with the same gene since each phenotype is listed in a separate row. Since we want to make a data frame with one row for each HGNC symbol, we must condense all the different phenotypes for each gene into the same row. We will do this by creating a single string to represent all the phenotypes and separate them by the comma `,` character so that they can be easily split later on.
 
 ```R
@@ -158,6 +162,12 @@ head(HPO)
 The HPO data includes entrez ID and entrez gene symbol. NCBI reports that gene symbols are provided by HGNC so most of these symbols are likely already what we need. However, it is possible that some of the symbols are out of date since we do not know how often NCBI updates their symbols and we do not know how long ago HPO created this list of NCBI symbols.
 
 Thus, we will create our own mapping of HGNC symbols to entrez gene IDs to make sure that we are able to map all of the genes in HPO to the most current HGNC symbol.
+
+&nbsp;
+
+### Download HGNC Data
+
+----
 
 First, we must retrieve the relevant data from the HGNC website. Navigate to the [https://www.genenames.org/download/custom/](custom downloads section of the HGNC website). Select only "Approved symbol,	Previous symbols, and	Synonyms" under the data provided by HGNC. Select "NCBI Gene ID(supplied by NCBI)" under data downloaded from external sources. These are the entrez IDs which we will need to use to map the data. Then download the resulting data file and save it as `"HGNCdata.txt"` to a sister directory called "data" of you working directory. This should be saved in the same place as `ALL_SOURCES_ALL_FREQUENCIES_genes_to_phenotype.txt` which was saved previously.
 
@@ -507,3 +517,17 @@ ordered <- phenoTab[sel,]
 ```
 
 We see some phenotypes that are the same as the most common phenotypes the entire HPO data set but also some that are unique to this group.
+
+&nbsp;
+
+###References and Acknowledgements
+
+----
+
+Sebastian Köhler, Leigh Carmody, Nicole Vasilevsky, Julius O B Jacobsen, et al. Expansion of the Human Phenotype Ontology (HPO) knowledge base and resources. Nucleic Acids Research. (2018) doi: 10.1093/nar/gky1105
+
+&nbsp;
+
+This package was based off of the [https://github.com/hyginn/rpt](RPT package by Boris Steipe).
+
+<!-- end -->
