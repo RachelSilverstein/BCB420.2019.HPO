@@ -79,10 +79,17 @@ head(HPOdata)
 # 4     8192 CLPP       Autosomal recessive inheritance HP:0000007
 # 5     8192 CLPP       Microcephaly                    HP:0000252
 # 6     8192 CLPP       Hypoplasia of the uterus        HP:0000013
+```
+&nbsp;
 
+The data set retrieved from HPO contains multiple rows with the same gene since each phenotype is listed in a separate row. Since we want to make a data frame with one row for each HGNC symbol, we must condense all the different phenotypes for each gene into the same row. We will do this by creating a single string to represent all the phenotypes and separate them by the comma `,` character so that they can be easily split later on.
+
+```R
+# See how many unique genes there are in the HPO data
 unique_genes <- unique(HPOdata$entrezSymb)
-length(unique_genes) # 7090
-HPO <- data.frame(matrix(nrow = 7090, ncol = 3))
+length(unique_genes) # 3924
+# Initialize a data frame of the correct dimensions
+HPO <- data.frame(matrix(nrow = 3924, ncol = 3))
 colnames(HPO) <- c("entrezSymb", "entrezID", "HPOterms")
 
 # collapse the phenotypes into one string... this may take a few minutes to run
@@ -96,224 +103,358 @@ for (i in seq_along(unique_genes)) {
   ID <- unique(rows$entrezID) # makes sure they are all the same or else you will get an error since you cannot add a multi elemnt vecctor to another vector
   HPO$entrezID[i] <- ID
 }
+head(HPO)
 ```
 
-Now we have a data frame containing the HPO annotation data that is ready to be mapped to HGNC symbols.
+The HPO data includes entrez ID and entrez gene symbol. NCBI reports that gene symbols are provided by HGNC so most of these symbols are likely already what we need. However, it is possible that some of the symbols are out of date since we do not know how often NCBI updates their symbols and we do not know how long ago HPO created this list of NCBI symbols.
+
+Thus, we will create our own mapping of HGNC symbols to entrez gene IDs to make sure that we are able to map all of the genes in HPO to the most current HGNC symbol.
+
+First, we must retrieve the relevant data from the HGNC website. Navigate to the [https://www.genenames.org/download/custom/](custom downloads section of the HGNC website). Select only "Approved symbol,	Previous symbols, and	Synonyms" under the data provided by HGNC. Select "NCBI Gene ID(supplied by NCBI)" under data downloaded from external sources. These are the entrez IDs which we will need to use to map the data. Then download the resulting data file and save it as `"HGNCdata.txt"` to a sister directory called "data" of you working directory. This should be saved in the same place as `ALL_SOURCES_ALL_FREQUENCIES_genes_to_phenotype.txt` which was saved previously.
+
+Now that the data is downloaded, proceed to load this data into R.
 
 &nbsp;
 
-### Mapping Entrez Genes to HGNC Symbols
+```R
+HGNC <- HPOdata <- read_tsv("../data/HGNCdata.txt", 
+                            skip = 1,
+                            col_names = c(
+                              'sym',
+                              'prevSym',
+                              'synonyms',
+                              'entrezID'),
+                            col_types = cols(
+                              sym = col_character(),
+                              prevSym = col_character(),
+                              synonyms = col_character(),
+                              entrezID = col_character()
+                            ))
+                            
+```
+
+
+&nbsp;
+
+### Mapping HGNC symbols to HPO terms
 
 ----
 
-The data from HPO contains "entrez gene ID" and "entrez gene symbol" for each phenotype-gene mapping. Although the gene symbols for NCBI genes are provided by HGNC, it is possible that the symbol is not up to date in the data provided by HPO. In order to check that the HGNC symbols are matched to the correct and most up-to-date entrez genes, we will use the biomaRt package to map HGNC symbols to entrez genes and compare our sesults to the mapping provided in the HPO data set.
+Now let's clean up the data frame so that all of the entrez IDs are unique and can be used for mapping...
 
+```R
+# We want this data frame to be searchable by entrezID so they should be unique
+sel <- duplicated(HGNC$entrezID)
+((HGNC$entrezID)[sel]) # all the duplicated ones are just missing values. Remove these.
+sel <- is.na(HGNC$entrezID)
+# keep the HGNC symbols with missing IDs in a data frame for later
+missingIDs <- HGNC[sel,]
+# remove them from HGNC
+HGNC <- HGNC[!sel,]
+# now there should be no duplicate entrezIDs so we can set them as the rownames
+rownames(HGNC) <- HGNC$entrezID
+```
 &nbsp;
 
-#### 1. Creating a Mapping tool using biomaRt
-
-----
-
-The goal is to create a data frame that can act as a map to translate HGNC symbols to entrez gene IDs.
-
-<ol>
-<li>The data frame must be searchable by HGNC symbol (these will be the rownames and must be unique).</li>
-<li> If the HGNC symbol maps to multiple entrez genes, we want to be able to retrieve all of the (possibly different) phenotypes associated with each of the entrez gene IDs with a single search of their common HGNC symbol. In order to facilitate this, we will concatenate entrez genes associated with the same HGNC symbol into the same string such that they can be stored in a single row.</li>
-</ol>
-
-We will thus create a data frame, `map`, of the following structure:
-
-2 columns:
-<ol>
-<li> `hgnc_symbol` (character vector): complete list of unique HGNC symbols from ensembl data base, accessed via biomaRt. These will also be the rownames of the data frame.
-<li> `entrezgene` (character vector): Each element is a string of Entrez gene IDs separated by `,` character if there is more than one
-</ol>
-
-&nbsp;
-
-##### 1.1 Download Ensembl Genes and Attributes
-
-Start by installing the biomaRt package and BiocInstaller. We will use biomaRt to access the Ensembl database of human genes in order to create a map between the HGNC symbols and entrez gene IDs.
+Now that all the entrez IDs in the HGNC data frame are unique, we can use them to map the entrez symbols in the HPO data to their respective HGNC symbols. First, though, we will see which of the HPO data are already mapped to appropriate HGNC symbols.
 
 ```R
-if (!require("BiocInstaller")) {
-  install.packages("BiocInstaller")
-}
-library("BiocInstaller")
+# check that all the HGNC symbols in HPO data are correct
+HGNC_syms <- HGNC$sym
+incorrect_sym <- !(HPO$entrezSymb %in% HGNC_syms)
+sum(incorrect_sym) # 38 of the gene symbols in HPO are not current HGNC symbols
 
-if (!require("biomaRt")) {
-  biocLite('biomaRt')
-}
-library("biomaRt")
-```
+# get the rows with incorrect symbols
+incorrect <- HPO[incorrect_sym,]
+# and remove them from the HPO data frame
+nrow(HPO) # 3924
+HPO <- HPO[!incorrect_sym,]
+nrow(HPO) # 3924 - 38 = 3886... correct
 
-Select ensembl as the database and fetch the `hsapiens_gene_ensembl` data set. Then search for attributes containing the words "hgnc" and "entrez" to determine the names of the attributes we wish to retrieve.
-
-```R
-genes <- useMart("ensembl", dataset="hsapiens_gene_ensembl")
-attributes <- listAttributes(genes)$name
-(grep("hgnc", attributes, ignore.case=TRUE, value=TRUE))
-(grep("entrez", attributes, ignore.case=TRUE, value=TRUE))
-
-# [1] "hgnc_id"         "hgnc_symbol"     "hgnc_trans_name"
-# [1] "entrezgene_trans_name" "entrezgene"
-```
-
-The attributes that we want are called "hgnc_symbol" and "entrezgene". Fetch these attributes.
-
-```R
-map <- getBM(attributes=c("hgnc_symbol", "entrezgene"), mart = genes)
-head(map)
-
-# hgnc_symbol entrezgene
-# 1       MT-TF         NA
-# 2     MT-RNR1       4549
-# 3       MT-TV         NA
-# 4     MT-RNR2       4550
-# 5      MT-TL1         NA
-# 6      MT-ND1       4535
-```
-
-The resulting data frame contains a mapping from an HGNC symbol to an entrez gene in each row. Importantly, HGNC symbols that do not map to an entrez gene contain `NA` in the `entrezgene` column and entrez genes that do not map to an HGNC symbol contain the empty string `""` in the `hgnc_symbol` column.
-
-&nbsp;
-
-##### 1.2 Resolving Duplicated Entrez Genes
-
-Since we need to search by HGNC symbol, there must be no duplicates in the HGNC symbol column so we will concatinate any entrez gene IDs that share the same HGNC symbol into the same row. Since any HGNC symbols that are missing ( `""`) will appear to be duplicated, we must first remove these rows from the data frame.
-
-```R
-(sum(map$hgnc_symbol == "")) # there are 1243 entrez genes that are 
-# not mapped to an HGNC symbol
-
-sel <- map$hgnc_symbol == ""
-map <- map[!sel,] # delete them
-(sum(map$hgnc_symbol == "")) # 0
-
-# now see whether there are any duplicated HGNC symbols
-(sum(duplicated(map$hgnc_symbol))) # 228
-
-# what are the symbols that are duplicated?
-dup <- duplicated(map$hgnc_symbol)
-dup_names <- map[dup,]$hgnc_symbol
-(dup_names[1:10]) # take a look at the first 10
-
-# "PPP1R18"  "PDXK"     "HLA-DQA2" "TP53TG3C" "TP53TG3C" "TP53TG3C" "TP53TG3C"
-# "ERCC6"    "TP53TG3E" "TP53TG3B"
-
-# select all the HGNC symbols that are not unique (cannot select them directly # with duplicated() as this will leave out the first occurence of each one)
-sel <- map$hgnc_symbol %in% dup_names
-duplicated <- map[sel,]
-nrow(duplicated) # 421
-head(duplicated)
-
-#  hgnc_symbol entrezgene
-# 218     PPP1R18  107987457
-# 219     PPP1R18     170954
-# 405        PDXK  105372824
-# 406        PDXK       8566
-# 637    HLA-DQA2       3118
-# 638    HLA-DQA2       3117
-
-# remove the duplicated ones from the map
-nrow(map) # 37807
-map <- map[!sel,]
-nrow(map) # 37807 - 421 = 37386... correct
-
-# create a list of the HGNC symbols that are duplicated
-dup_names <- unique(dup_names)
-(length(dup_names)) # 193 unique names
-
-# initialize a new data frame with a row for each unique symbol in duplicated
-dup_summ <- data.frame(matrix(ncol = 3, nrow = 193))
-colnames(dup_summ) <- c("hgnc_symbol", "entrezgene", "multi")
-
-for (i in seq_along(dup_names)) {
-  # choose the rows that have the same HGNC symbol and the entrezgene is not NA
-  sel <- (duplicated$hgnc_symbol == dup_names[i]) & (!is.na(duplicated$entrezgene))
-  rows <- duplicated[sel,]
-  entrezIDs <- paste(rows$entrezgene, collapse = ",")
-  dup_summ$hgnc_symbol[i] <- dup_names[i]
-  dup_summ$entrezgene[i] <- entrezIDs
-}
-
-head(dup_summ) # take a look
-
-#   hgnc_symbol                                    entrezgene
-# 1     PPP1R18                               107987457,170954
-# 2        PDXK                                 105372824,8566
-# 3    HLA-DQA2                                      3118,3117
-# 4    TP53TG3C 102724127,102724101,102723713,102723655,653550
-# 5       ERCC6                                    267004,2074
-# 6    TP53TG3E                            102724101,102723655
-
-dup_summ$multi <- rep(TRUE, times = nrow(dup_summ))
-map$multi <- rep(FALSE, times = nrow(map))
-# add these rows back to the map
-map <- rbind(map, dup_summ)
-nrow(map) # 37386 + 193 = 37579... correct
-
-# assign row names (and confirm that the symbols are unique)
-rownames(map) <- map$hgnc_symbol
-```
-
-We have now created the `map` data frame according to the specifications listed above.
-
-&nbsp;
-
-### 2. Assign HPO Terms to HGNC symbols
-
-The data frame, `HPO`, should be available in your global environment. If not, refer to the steps in the "Data Download and Import" section above.
-
-First, determine the set of HGNC symbols for which we want to retrieve HPO phenotypes. We will use the example gene set provided by [https://github.com/hyginn/](Boris Steipe on GitHub).
-
-```R
-# load the example gene set
-myURL <- paste0("https://github.com/hyginn/", "BCB420-2019-resources/blob/master/HGNC.RData?raw=true")
-load(url(myURL))
-head(HGNC)
-row_number <- nrow(HGNC) # 27087
-
-
-# initialize a new data frame to hold the final mappings
-mapping <- data.frame(matrix(ncol = 2, nrow = row_number))
-colnames(mapping) <- c("HGNC", "phenotypes")
-
-mapping$HGNC <- HGNC$sym
-
-for (i in seq_along(mapping$HGNC)) {
-  HGNCsymb <- mapping$HGNC[i]
-  entrezgene <- map[HGNCsymb, "entrezgene"]
-  if (map$multi[i] == TRUE) {
-    entrezVector <- unlist(strsplit(entrezgene, split = ","))
-    sel <- HPO$entrezID %in% entrezVector
-    HPOrows <- HPO[sel,]
-    phenotypes <- HPOrows$HPOterms
-    phenoVector <- unlist(strsplit(phenotypes, split = ","))
-    phenotypes <- unique(phenotypes)
-    phenoStr <- paste(phenotypes, collapse = ",")
-    phenotypes <- phenoStr 
-  } else {
-    sel <- HPO$entrezID == entrezgene
-    HPOrow <- HPO[sel,]
-    phenotypes <- HPOrow$HPOterms
+# Map the incorrect symbols to the correct ones using the entrezID
+for (i in seq_along(incorrect$entrezID)) {
+  entrezID <- incorrect$entrezID[i]
+  HGNCrow <- HGNC[entrezID,]
+  correctSym <- HGNCrow$sym # if the entrezID is not in the HGNC data frame this will be NA
+  if (!is.na(correctSym)) {
+    incorrect$entrezSymb[i] <- correctSym
   }
-  mapping$phenotypes[i] <- phenotypes
-  mapping$HGNC[i] <- HGNCsymb
 }
 
+# check whether there are still any entrez symbols that are wrong
+incorrect_sym <- !(incorrect$entrezSymb %in% HGNC_syms)
+sum(incorrect_sym) # 2
+# This step corrected 36 of the 38 wrong HGNC symbols. Let's add the corrected ones to the HPO data frame.
+corrected <- incorrect[!incorrect_sym,]
+incorrect <- incorrect[incorrect_sym,]
+HPO <- rbind(HPO, corrected)
 
+# Now let's look at the ones that are still incorrect:
+(incorrect)
 
+# entrezSymb  entrezID
+# 551     H19-ICR 105259599
+# 1481    HBB-LCR 109580095
 
-> 
+sel <- grepl('H19-ICR', HGNC$synonyms)
+sum(sel) # 0. H19-ICR is not listed as a synonym
+sel <- grepl('H19-ICR', HGNC$prevSym)
+sum(sel) # 0. H19-ICR is not listed as a previous symbol
+('H19-ICR' %in% missingIDs$sym) # FALSE, it is not one of the genes that had a missing entrezID and was removed from the HGNC data frame.
 
+sel <- grepl('HBB-LCR', HGNC$synonyms)
+sum(sel) # 0. HBB-LCR is not listed as a synonym
+sel <- grepl('HBB-LCR', HGNC$prevSym)
+sum(sel) # 0. HBB-LCR is not listed as a previous symbol
+('HBB-LCR' %in% missingIDs$sym) # FALSE, it is not one of the genes that had a missing entrezID and was removed from the HGNC data frame.
+
+# We will omit these 2 genes from the final data frame as we were unable to map them to an HGNC symbol.
+
+# Check that all the HGNC symbols in our final mapping are valid:
+sum(!(HPO$entrezSymb %in% HGNC$sym)) # 0... correct
+
+# Now we can remove the entrez IDs from the HPO data frame to make the mapping tool
+HGNCtoHPO <- HPO[, c("entrezSymb", 'HPOterms')]
+head(HGNCtoHPO)
+
+#And name the entrez gene column "HGNCsym" since they are now all HGNC symbols
+colnames(HGNCtoHPO) <- c("HGNCsym", "HPOterms")
+rownames(HGNCtoHPO) <- HGNCtoHPO$HGNCsym
+
+# save the mapping tool
+save(HGNCtoHPO, file = file.path("inst", "extdata", "HGNCtoHPO.RData"))
+```
+
+&nbsp;
+
+### Analysis of the Entire Gene Set Provided by HPO
+
+----
+
+Now we have created a data frame that maps all of the HPO phenotype annotations to current HPNC symbols. First, let's look at what fraction of all HGNC symbols have HPO annotations.
+
+```R
+# Coverage
+nrow(HGNCtoHPO)/nrow(HGNC)*100 # 9.441729
+# the HPO database only lists phenotypes for about 10% of human genes.
+```
+
+The HPO has annotations for about 10% of human genes. This makes sense since we do not know how and if most genes contribute to phenotype in humans.
+
+&nbsp;
+
+Now let's see how many phenotypes are associated with each gene in the HPO data set.
+
+```R
+number_of_phenotypes <- 0
+for (i in seq_along(HGNCtoHPO$HGNCsym)) {
+  phenoVec <- unlist(strsplit(HGNCtoHPO$HPOterms[i], split = ","))
+  phenoNum <- length(phenoVec)
+  number_of_phenotypes[i] <- phenoNum
+}
+
+hist(number_of_phenotypes, breaks = 100, xlab = "Number of Phenotypes", 
+     ylab = "Number of Genes", main = "Number of phenotypes associated \n with all HPO annotated genes")
+```
+
+![](./inst/img/fig_1.png?sanitize=true "Phenotype distribution")
+
+&nbsp;
+
+The number of phenotypes associated with each gene seems to decay exponentially. A few genes are associated with many phenotypes while many genes are associated with few phenotypes. It is not clear whether this reflects the biology of the genes or whether the genes with many phenotype annotations are simply better-studied than other genes.
+
+```R
+mean(number_of_phenotypes) # 35
 
 ```
 
+The mean number of phenotypes for each gene is 35.
 
+&nbsp;
 
+Now let's see how many genes are associated with each phenotype.
+```R
+# How many genes associated with each phenotype?
+phenoLst <- strsplit(HGNCtoHPO$HPOterms, split = ",") # list of vectors
+phenoVec <- unlist(phenoLst, recursive = FALSE)
+phenoTab <- table(phenoVec)
+phenoTab <- data.frame(phenoTab)
+barplot(height = sort(phenoTab$Freq, decreasing = TRUE), xlab = 'Phenotype', ylab = 'Number of Genes',
+        main = 'Number of genes associated \n with each phenotype')
+```
 
+![](./inst/img/fig_2.png?sanitize=true "gene distribution")
 
+&nbsp;
 
+What is the mean number of genes for which a phenotype is associated?
+```R
+mean(phenoTab$Freq) # average phenotype associated with about 20 genes
+(20/nrow(HGNCtoHPO) * 100) # average phenotype associated with about 0.5% of the genes in HPO data set
+```
 
-<!--end-->
+The average phenotype is associated with abot 20 genes which corresponds to about 0.5% of the total genes that have HPO annotations.
+
+&nbsp;
+
+What phenotypes are the most common?
+
+```R
+# list the top 10 most common phenotypes
+sel <- order(phenoTab$Freq, decreasing = TRUE)
+ordered <- phenoTab[sel,]
+(ordered[1:10,])
+
+# phenoVec Freq
+# 1296 Autosomal recessive inheritance 2187
+# 3933         Intellectual disability 1780
+# 1294  Autosomal dominant inheritance 1373
+# 3155      Global developmental delay 1203
+# 6112                        Seizures 1196
+# 6239                   Short stature  895
+# 4906                       Nystagmus  723
+# 4517                    Microcephaly  713
+# 3102           Generalized hypotonia  706
+# 4694              Muscular hypotonia  682
+```
+
+&nbsp;
+
+### Annotations of the Example Gene Set
+
+----
+
+The example gene set (xSet) was copy and pasted from the BCB420 resources repository on GitHub.
+
+These genes are functionally related in that they are associated with the phagosome / lysosome fusion system.
+
+```
+# ANNOTATION OF EXAMPLE GENE SET
+xSet <- c("AMBRA1", "ATG14", "ATP2A1", "ATP2A2", "ATP2A3", "BECN1", "BECN2",
+          "BIRC6", "BLOC1S1", "BLOC1S2", "BORCS5", "BORCS6", "BORCS7",
+          "BORCS8", "CACNA1A", "CALCOCO2", "CTTN", "DCTN1", "EPG5", "GABARAP",
+          "GABARAPL1", "GABARAPL2", "HDAC6", "HSPB8", "INPP5E", "IRGM",
+          "KXD1", "LAMP1", "LAMP2", "LAMP3", "LAMP5", "MAP1LC3A", "MAP1LC3B",
+          "MAP1LC3C", "MGRN1", "MYO1C", "MYO6", "NAPA", "NSF", "OPTN",
+          "OSBPL1A", "PI4K2A", "PIK3C3", "PLEKHM1", "PSEN1", "RAB20", "RAB21",
+          "RAB29", "RAB34", "RAB39A", "RAB7A", "RAB7B", "RPTOR", "RUBCN",
+          "RUBCNL", "SNAP29", "SNAP47", "SNAPIN", "SPG11", "STX17", "STX6",
+          "SYT7", "TARDBP", "TFEB", "TGM2", "TIFA", "TMEM175", "TOM1",
+          "TPCN1", "TPCN2", "TPPP", "TXNIP", "UVRAG", "VAMP3", "VAMP7",
+          "VAMP8", "VAPA", "VPS11", "VPS16", "VPS18", "VPS33A", "VPS39",
+          "VPS41", "VTI1B", "YKT6")
+```
+
+Let's determine how many of the genes in the example gene set have HPO annotated phenotypes.
+
+```R
+# Determine which of these genes have HPO annotations
+sum(xSet %in% HGNCtoHPO$HGNCsym) # 21
+sum(xSet %in% HGNCtoHPO$HGNCsym) / length(xSet) * 100 # 24.70588
+# About 25% of the genes in the example gene set have annotated phenotypes
+# this is enriched over 2x compared to all genes
+```
+
+About 25% of the genes in the example set have HPO phenotypes which is enriched over 2 times compared to the total gene set. Perhaps this is because they are important genes since they are involved in an important biological process and thus more likely to have phenotypes. Alternatively, they may be more well-studied genes than the average gene.
+
+&nbsp;
+
+Finally, let's create a data frame of the annotations for the example gene set and save it.
+
+```R
+# Create a data frame of these annotations
+# list phenotypes as the empty string if there are not HPO annotations
+xAnnotations <- data.frame(matrix(ncol = 2, nrow = length(xSet)))
+colnames(xAnnotations) <- c("HGNCsym", "HPOterms")
+for (i in seq_along(xSet)) {
+  sym <- xSet[i]
+  xAnnotations$HGNCsym[i] <- sym
+  phenotypes <- HGNCtoHPO[sym, "HPOterms"]
+  if (!is.na(phenotypes)) {
+    xAnnotations$HPOterms[i] <- phenotypes
+  } else {
+    xAnnotations$HPOterms[i] <- ""
+  }
+}
+
+# save this annotated example set
+write_tsv(xAnnotations, "./inst/extdata/xAnnotations.txt")
+```
+
+The annotated gene set is saved as a tsv as `"./inst/extdata/xAnnotations.txt"`.
+
+&nbsp;
+
+### Analysis of the Example Gene Set
+
+----
+
+How many phenotypes are associated with each gene?
+
+```R
+number_of_phenotypes2 <- 0
+nonZero <- xAnnotations[xAnnotations$HPOterms != "",]
+for (i in seq_along(nonZero$HGNCsym)) {
+  phenoVec <- unlist(strsplit(nonZero$HPOterms[i], split = ","))
+  phenoNum <- length(phenoVec)
+  number_of_phenotypes2[i] <- phenoNum
+}
+
+hist(number_of_phenotypes2, breaks = 6, xlab = "Number of Phenotypes", 
+     ylab = "Number of Genes", main = "Number of phenotypes associated \n with Example Gene Set")
+     
+```
+![](./inst/img/fig_3.png?sanitize=true "pheno distribution example")
+
+The number of phenotypes per gene also decays (exponentially?) as in the larger HPO data set.
+
+```R
+mean(number_of_phenotypes2) # 41
+```
+
+The mean number of phenotypes per gene is larger than for the entire HPO data set. Once again, perhaps this is because they are well studied or biologically important genes (or both).
+
+```R
+# How many genes per phenotype?
+phenoLst <- strsplit(nonZero$HPOterms, split = ",") # list of vectors
+phenoVec <- unlist(phenoLst, recursive = FALSE)
+phenoTab <- table(phenoVec)
+phenoTab <- data.frame(phenoTab)
+
+barplot(height = sort(phenoTab$Freq, decreasing = TRUE), space = 0.5, xlab = 'Phenotype', ylab = 'Number of Genes',
+        main = 'Number of genes associated \n with each phenotype in Example Set')
+```
+
+![](./inst/img/fig_4.png?sanitize=true "gene distribution example")
+
+```R
+mean(phenoTab$Freq) # average phenotype associated with about 1.5 genes
+(1.5/85 * 100) # average phenotype associated with 1.8 % of genes in list (enriched from 0.5% for all HPO data)
+```
+
+The average phenotype is associated with 1.5 genes which corresponds to 1.8 percent of genes in the example data set. This is more than the 0.5 percent of genes that are associated with the average phenotype in the entire HPO dataset. This is as expected since all of the genes in the example set are involved in the same process. Thus, we would expect them to have more phenoypes in common than a group of unrelated genes.
+
+&nbsp;
+
+What are the most common phenotypes associated with the example gene set?
+
+```R
+# list the top 10 most common phenotypes
+sel <- order(phenoTab$Freq, decreasing = TRUE)
+ordered <- phenoTab[sel,]
+(ordered[1:10,])
+
+# phenoVec Freq
+# 323         Intellectual disability   14
+# 88  Autosomal recessive inheritance   10
+# 87   Autosomal dominant inheritance    9
+# 492                        Seizures    8
+# 192                      Dysarthria    7
+# 263      Global developmental delay    7
+# 83                           Ataxia    6
+# 59                        Agitation    5
+# 65    Amyotrophic lateral sclerosis    5
+# 72                          Anxiety    5
+```
+
+We see some phenotypes that are the same as the most common phenotypes the entire HPO data set but also some that are unique to this group.
