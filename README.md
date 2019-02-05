@@ -10,6 +10,55 @@
 
 &nbsp;
 
+### About this Package
+
+----
+
+This package provides instructions to create a data frame to map HGNC symbols to Human Phenotype Ontology terms associated with those genes.
+
+Additionally, steps to annotate an example gene set with HPO terms is provided and some characteristics of this gene set are analyzed.
+
+&nbsp;
+
+#### Contents
+
+```text
+--BCB420.2019.HPO/
+   |__.gitignore
+   |__.Rbuildignore
+   |__BCB420.2019.HPO.Rproj
+   |__DESCRIPTION
+   |__dev/
+      |__rptTwee.R      # creates this tree
+      |__toBrowser.R    # display contents of README to browser
+   |__inst/
+      |__extdata/
+         |__HGNCtoHPO.RData   # mapping data frame created below
+         |__test_lseq.dat
+         |__xAnnotations.txt  # annotations of example gene set
+      |__img/                 # Images for the .md file
+         |__fig_1.png
+         |__fig_2.png
+         |__fig_3.png
+         |__fig_4.png
+      |__scripts/
+         |__fullScript.R  # contains all R code from README.md
+   |__LICENSE
+   |__man/
+      |__lseq.Rd
+   |__NAMESPACE
+   |__R/
+      |__lseq.R
+      |__zzz.R
+   |__README.md
+   |__tests/
+      |__testthat.R
+      |__testthat/
+         |__helper-functions.R
+         |__test_lseq.R
+```
+
+&nbsp;
 
 ### About the Data Source
 
