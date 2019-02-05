@@ -169,7 +169,7 @@ Thus, we will create our own mapping of HGNC symbols to entrez gene IDs to make 
 
 ----
 
-First, we must retrieve the relevant data from the HGNC website. Navigate to the [https://www.genenames.org/download/custom/](custom downloads section of the HGNC website). Select only "Approved symbol,	Previous symbols, and	Synonyms" under the data provided by HGNC. Select "NCBI Gene ID(supplied by NCBI)" under data downloaded from external sources. These are the entrez IDs which we will need to use to map the data. Then download the resulting data file and save it as `"HGNCdata.txt"` to a sister directory called "data" of you working directory. This should be saved in the same place as `ALL_SOURCES_ALL_FREQUENCIES_genes_to_phenotype.txt` which was saved previously.
+First, we must retrieve the relevant data from the HGNC website. Navigate to the [custom downloads section of the HGNC website](https://www.genenames.org/download/custom/). Select only "Approved symbol,	Previous symbols, and	Synonyms" under the data provided by HGNC. Select "NCBI Gene ID(supplied by NCBI)" under data downloaded from external sources. These are the entrez IDs which we will need to use to map the data. Then download the resulting data file and save it as `"HGNCdata.txt"` to a sister directory called "data" of you working directory. This should be saved in the same place as `ALL_SOURCES_ALL_FREQUENCIES_genes_to_phenotype.txt` which was saved previously.
 
 Now that the data is downloaded, proceed to load this data into R.
 
@@ -520,7 +520,7 @@ We see some phenotypes that are the same as the most common phenotypes the entir
 
 &nbsp;
 
-###References and Acknowledgements
+### References and Acknowledgements
 
 ----
 
@@ -528,6 +528,6 @@ Sebastian Köhler, Leigh Carmody, Nicole Vasilevsky, Julius O B Jacobsen, et al.
 
 &nbsp;
 
-This package was based off of the [https://github.com/hyginn/rpt](RPT package by Boris Steipe).
+This package was based off of the [RPT package by Boris Steipe](https://github.com/hyginn/rpt).
 
 <!-- end -->
