@@ -6,6 +6,8 @@ rptTwee.R:          Copyright (c) 2018  Boris Steipe <https://orcid.org/0000-000
 lseq.R:             Copyright (c) 2018  Boris Steipe <https://orcid.org/0000-0002-1134-6758>
 test_lseq.R:        Copyright (c) 2018  Boris Steipe <https://orcid.org/0000-0002-1134-6758>
 README.md:          Copyright (c) 2018  Rachel Silverstein <https://orcid.org/0000-0001-5724-2252>
+toBrowser.R:        Copyright (c) 2018  Boris Steipe <https://orcid.org/0000-0002-1134-6758>
+HGNCtoHPO.RData:    Copyright (c) 2018  Rachel Silverstein <https://orcid.org/0000-0001-5724-2252>
 
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
